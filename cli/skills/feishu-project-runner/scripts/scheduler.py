@@ -238,6 +238,11 @@ def tick(settings, origin):
                 status['pending_dispatch'] = pending = None
                 if status.get('needs_input', {}).get('kind') in ('queue_delivery_unknown', 'round_result_missing'):
                     status['last_resolved_incident'] = dict(status.pop('needs_input'), recovered_at=now())
+            busy = session_busy(settings['session_log'])
+            if status.get('needs_input', {}).get('kind') in ('poller_error', 'automatic_turn_aborted'):
+                status['last_resolved_incident'] = dict(status.pop('needs_input'), recovered_at=now())
+                status.pop('last_alert_incident', None)
+            status['installation_status'] = 'verified_live_trigger' if origin == 'launchd' else status.get('installation_status')
             if lock_present:
                 status.update(outcome='waiting_for_lock', waiting_for_lock={
                     'path': str(worker_lock), 'owner': read_json(worker_lock / 'owner.json', {}),
@@ -245,7 +250,6 @@ def tick(settings, origin):
                 save(status_path, status)
                 return status
             status.pop('waiting_for_lock', None)
-            busy = session_busy(settings['session_log'])
             unfinished = not state or any(t.get('status') in ('queued', 'in_progress', 'blocked', 'waiting_for_lock') for t in state.get('tasks', []))
             reason = dispatch_reason(bool(dirty), unfinished, busy, bool(pending))
             if reason:
@@ -280,10 +284,6 @@ def tick(settings, origin):
             unresolved = status.get('needs_input', {})
             if unresolved.get('kind') == 'queue_delivery_unknown' and status.get('alert_delivery', '').startswith('unavailable'):
                 notify_error(status, settings, config, status_path, unresolved['incident_id'], status.get('last_error') or unresolved['question'])
-            if status.get('needs_input', {}).get('kind') in ('poller_error', 'automatic_turn_aborted'):
-                status['last_resolved_incident'] = dict(status.pop('needs_input'), recovered_at=now())
-                status.pop('last_alert_incident', None)
-            status['installation_status'] = 'verified_live_trigger' if origin == 'launchd' else status.get('installation_status')
             save(status_path, status)
         except Exception as error:
             status.update(outcome='error', last_error=str(error), last_error_at=now())

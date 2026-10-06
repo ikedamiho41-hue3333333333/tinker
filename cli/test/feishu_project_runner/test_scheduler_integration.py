@@ -122,6 +122,16 @@ else:
         self.assertEqual(self.poller.tick(self.settings, 'test')['outcome'], 'disabled')
         self.assertEqual(self.queue_count(), 0)
 
+    def test_identity_recovery_while_waiting_for_lock_clears_old_alert(self):
+        self.hold_worker_lock()
+        self.write('auth.json', {'identities': {'user': {'verified': False, 'openId': 'owner'}}})
+        self.poller.tick(self.settings, 'test')
+        self.write('auth.json', {'identities': {'user': {'verified': True, 'openId': 'owner'}}})
+        result = self.poller.tick(self.settings, 'launchd')
+        self.assertEqual(result['outcome'], 'waiting_for_lock')
+        self.assertNotIn('needs_input', result)
+        self.assertEqual(result['installation_status'], 'verified_live_trigger')
+
     def test_one_delivery_one_queue_then_idle(self):
         first = self.poller.tick(self.settings, 'test')
         self.assertEqual(first['outcome'], 'queued')
