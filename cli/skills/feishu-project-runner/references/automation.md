@@ -2,6 +2,8 @@
 
 此 skill 通过官方 lark-cli 读取飞书，在成员自己的 Codex 项目窗口执行任务。无需登录 Tinker 网页；不依赖 Tinker 邮件、API、数据库或任务板。当前集成提供完整包和安装入口，不做 Tinker 任务双向同步。
 
+成员首次使用可先看[团队操作说明与可复制指令](team-guide.md)，本页用于本机调度部署和运行证据核验。
+
 ## 1. 安装
 
 准备 Node.js >=18、Git、可用的 Codex 和已授权的官方 lark-cli。在 Tinker 仓库根目录运行：

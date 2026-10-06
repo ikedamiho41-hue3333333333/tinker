@@ -78,6 +78,8 @@ LLM 支持: Anthropic Claude (默认) / OpenAI / DeepSeek。
 
 包内提供可选的 macOS/Codex 后台轮询：神来－圆周率全天每10分钟检查，实际任务与成果报告由本人项目会话处理。[团队接入、手动执行、调度验证与停止步骤](cli/skills/feishu-project-runner/references/automation.md)。此版本不接入 Tinker 网页任务状态。
 
+团队成员可直接照着[安装与 Codex 使用说明书](cli/skills/feishu-project-runner/references/team-guide.md)操作，复制本人接入、执行及自动调度指令。
+
 ---
 
 ## 让小伙伴一起测试

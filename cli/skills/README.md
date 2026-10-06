@@ -35,3 +35,5 @@ tinker skills list               # 看有哪些技能
 `--agent` 默认 `claude`，`codex` 使用官方支持的 [.agents/skills 目录](https://developers.openai.com/codex/skills)。若已在旧路径 ~/.codex/skills 安装同名技能，先比较版本，选择一个安装位置，避免重复发现。
 
 飞书团队首次接入、手动执行、可选 macOS 调度与验证步骤见 [独立运行与团队安装](feishu-project-runner/references/automation.md)。该版本不接入 Tinker 网页任务状态，不将飞书任务自动标为 Tinker 完成。
+
+直接给团队成员使用的[安装与 Codex 操作说明](feishu-project-runner/references/team-guide.md)包含“飞书项目推进员”角色模板、首次接入、手动试跑、报告授权、自动运行及暂停/恢复指令。
