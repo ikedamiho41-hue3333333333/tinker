@@ -93,11 +93,16 @@ test('schema --json 合法 · 含核心命令', () => {
   }
 });
 
-test('skills --json · 6 个技能都带 category', () => {
+test('skills --json · 技能入口齐全且都带 category', () => {
   const { out } = run(['skills', '--json']);
   const j = JSON.parse(out);
   assert.equal(j.ok, true);
-  assert.equal(j.skills.length, 6);
+  const names = new Set(j.skills.map(s => s.name));
+  for (const name of ['tinker', 'tinker-borrow', 'tinker-collab', 'tinker-record', 'tinker-todo', 'tinker-triggers', 'tinker-voice', 'feishu-project-runner']) {
+    assert.ok(names.has(name), `技能缺入口 ${name}`);
+  }
+  assert.equal(names.size, j.skills.length, '技能名不能重复');
+  assert.ok(j.skills.every(s => s.description && s.category), '技能缺描述或分组');
   const cats = new Set(j.skills.map(s => s.category));
   for (const c of ['通用', '个人', '团队']) assert.ok(cats.has(c), `技能缺分组 ${c}`);
 });

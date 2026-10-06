@@ -72,6 +72,12 @@ tinker config                        # 看当前配置
 
 LLM 支持: Anthropic Claude (默认) / OpenAI / DeepSeek。
 
+### 飞书项目推进 skill（可独立使用）
+
+无需 Tinker 登录，在仓库根目录运行 `node cli/bin/tinker.js skills install --agent codex --only feishu-project-runner`，即可安装完整的 `$feishu-project-runner` 包。成员在自己的项目窗口核对飞书身份、群、职责和授权后调用；安装不会自动启动调度。
+
+包内提供可选的 macOS/Codex 后台轮询：神来－圆周率全天每10分钟检查，实际任务与成果报告由本人项目会话处理。[团队接入、手动执行、调度验证与停止步骤](cli/skills/feishu-project-runner/references/automation.md)。此版本不接入 Tinker 网页任务状态。
+
 ---
 
 ## 让小伙伴一起测试

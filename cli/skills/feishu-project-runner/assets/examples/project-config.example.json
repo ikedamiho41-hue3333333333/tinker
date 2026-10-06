@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "project_name": "YOUR_PROJECT",
+  "chat_name": "YOUR_CHAT_NAME",
+  "chat_id": "YOUR_VERIFIED_CHAT_ID",
+  "workspace": "/ABSOLUTE/PATH/TO/YOUR/PROJECT",
+  "owner_name": "YOUR_NAME",
+  "owner_open_id": "YOUR_VERIFIED_OPEN_ID",
+  "sender_name": "YOUR_BOT_NAME",
+  "sender_app_id": "YOUR_BOT_APP_ID",
+  "report_recipient_open_id": "YOUR_VERIFIED_OPEN_ID",
+  "read_identity": "user",
+  "send_identity": "bot",
+  "role_scope": "YOUR_CONFIRMED_RESPONSIBILITIES",
+  "reporting_authorized": false,
+  "schedule": {
+    "interval_minutes": 10,
+    "window_mode": "all_day",
+    "start": null,
+    "end": null,
+    "timezone": "UTC",
+    "enabled": false,
+    "status": "not_verified",
+    "status_path": "/ABSOLUTE/PATH/TO/SERVICE/scheduler-status.json",
+    "worker_state_path": "/ABSOLUTE/PATH/TO/SERVICE/worker-state.json",
+    "control_path": "/ABSOLUTE/PATH/TO/SERVICE/poller-config.json"
+  }
+}

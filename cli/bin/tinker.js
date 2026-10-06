@@ -968,7 +968,7 @@ const SKILLS_SRC_DIR = path.join(__dirname, '..', 'skills');
 
 // 技能归类 · 跟 help 的个人/团队分栏一个心智
 // 团队技能只在工作室场景才被 AI 加载 (靠 description 里的场景词自动 gate)
-const SKILL_TEAM = new Set(['tinker-collab']);
+const SKILL_TEAM = new Set(['tinker-collab', 'feishu-project-runner']);
 const SKILL_COMMON = new Set(['tinker', 'tinker-triggers']);
 function skillCategory(name) {
   if (SKILL_TEAM.has(name)) return '团队';
@@ -1020,35 +1020,39 @@ async function cmdSkills(sub, opts = {}) {
     log('');
     log(sepia('  装进本机所有项目: ') + vermilion('tinker skills install'));
     log(sepia('  只装当前 repo:   ') + vermilion('tinker skills install --local'));
+    log(sepia('  Codex 选装飞书:  ') + vermilion('tinker skills install --agent codex --only feishu-project-runner'));
     log('');
     return;
   }
 
   if (sub === 'install') {
     if (skills.length === 0) { err('没找到 skill 源文件 (' + SKILLS_SRC_DIR + ')'); process.exit(1); }
-    // 默认装全局 ~/.claude/skills · --project 装当前 repo .claude/skills
-    const baseDir = opts.local
-      ? path.join(process.cwd(), '.claude', 'skills')
-      : path.join(os.homedir(), '.claude', 'skills');
-    const written = [];
-    for (const s of skills) {
-      const dir = path.join(baseDir, s.name);
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'SKILL.md'), s.body);
-      written.push(s.name);
+    const agent = opts.agent === undefined ? 'claude' : opts.agent;
+    if (!['claude', 'codex'].includes(agent)) { err('--agent 必须是 claude 或 codex'); process.exit(1); }
+    const selected = opts.only === undefined ? skills : skills.filter(s => s.name === opts.only);
+    if (selected.length === 0) { err('未知 skill: ' + opts.only); process.exit(1); }
+    let result;
+    try {
+      result = require('../lib/skills').installSkills(SKILLS_SRC_DIR, selected.map(s => s.name),
+        opts.local ? process.cwd() : os.homedir(), agent);
+    } catch (error) {
+      err('安装 skill 失败: ' + error.message); process.exit(1);
     }
-    if (opts.json) { log(JSON.stringify({ ok: true, installed: written, dir: baseDir })); return; }
+    const { baseDir, backups } = result;
+    const written = selected.map(s => s.name);
+    if (opts.json) { log(JSON.stringify({ ok: true, installed: written, dir: baseDir, agent, backups })); return; }
     log('');
     ok('装好 ' + written.length + ' 个 Tinker skill');
     log(sepia('  位置: ') + baseDir);
     for (const n of written) log(sepia('    · ') + n);
+    for (const b of backups) log(sepia('  原版本已备份: ') + b.path);
     log('');
     log(sepia('  ' + (opts.local ? '只对当前 repo 生效' : '本机所有项目生效') + ' · 下次起 AI session 自动能按场景加载'));
     log('');
     return;
   }
 
-  err('用法: tinker skills [list] | tinker skills install [--local]');
+  err('用法: tinker skills [list] | tinker skills install [--agent claude|codex] [--only <name>] [--local]');
   process.exit(1);
 }
 
@@ -8414,7 +8418,7 @@ function help() {
   log('  ' + vermilion('tinker login') + sepia('                       配置 server + 钥匙 + LLM'));
   log('  ' + vermilion('tinker onboard') + sepia('                     一站式配齐 · 项目 / git hook / claude hook / CLAUDE.md (login 之后跑这一条)'));
   log('  ' + vermilion('tinker onboard --update') + sepia('             刷新 CLAUDE.md 里的 Tinker 协作约定段'));
-  log('  ' + vermilion('tinker skills install') + sepia('              装 Tinker Skills 进 ~/.claude/skills (按场景自动加载 · 加 --local 只装当前 repo)'));
+  log('  ' + vermilion('tinker skills install') + sepia('              装完整 Skills · --agent codex 使用 .agents/skills · --only 选装 · --local 当前 repo'));
   log('');
   log(sepia('  ') + vermilion('日常 · 半自动'));
   log('  ' + vermilion('tinker draft') + sepia('                       LLM 看 git 历史 · 起草 1-3 条候选到 .tinker/drafts/'));
@@ -8592,7 +8596,9 @@ function parseArgs(args) {
     else if (a === '--since') opts.since = args[++i];
     else if (a === '-p' || a === '--project') opts.projectId = args[++i];
     else if (a.startsWith('--only=')) opts.only = a.slice('--only='.length);
-    else if (a === '--only') opts.only = args[++i];
+    else if (a === '--only') opts.only = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : '';
+    else if (a === '--agent') opts.agent = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : '';
+    else if (a.startsWith('--agent=')) opts.agent = a.slice('--agent='.length);
     else if (a === '--feedback-ask') opts.feedbackAsk = args[++i];
     else if (a.startsWith('--feedback-ask=')) opts.feedbackAsk = a.slice('--feedback-ask='.length);
     else if (a === '--no-feedback') opts.noFeedback = true;
@@ -9077,7 +9083,9 @@ function cmdSchema(opts = {}) {
       ], jsonOutput: false, example: 'tinker hook install-codex' },
       { name: 'skills', purpose: '装 Tinker Skills 进 AI · 一域一个 · 按场景自动加载 (比整块 CLAUDE.md 省 context)', args: [
         { arg: 'list | install', purpose: 'list 看有哪些技能 · install 拷进 skills 目录' },
-        { flag: '--local', purpose: 'install 时只装当前 repo (.claude/skills) · 默认装全局 ~/.claude/skills' },
+        { flag: '--agent claude|codex', purpose: '默认 claude (.claude/skills)；codex 使用 .agents/skills' },
+        { flag: '--only <name>', purpose: '只安装指定技能，复制完整配套目录' },
+        { flag: '--local', purpose: '只装当前 repo；默认装到本人主目录' },
         { flag: '--json', purpose: '结构化' },
       ], jsonOutput: true, example: 'tinker skills install' },
       { name: 'voice', purpose: 'voice fingerprint 系统', args: [

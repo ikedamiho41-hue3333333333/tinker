@@ -1,0 +1,9 @@
+{
+  "project_config": "/ABSOLUTE/PATH/TO/SERVICE/poller-config.json",
+  "thread_id": "YOUR_EXISTING_CODEX_THREAD_ID",
+  "session_log": "/ABSOLUTE/PATH/TO/YOUR/SESSION.jsonl",
+  "lark": "/ABSOLUTE/PATH/TO/lark-cli",
+  "codex": "/ABSOLUTE/PATH/TO/codex",
+  "project_workspace": "/ABSOLUTE/PATH/TO/YOUR/PROJECT",
+  "worker_state": "/ABSOLUTE/PATH/TO/SERVICE/worker-state.json"
+}

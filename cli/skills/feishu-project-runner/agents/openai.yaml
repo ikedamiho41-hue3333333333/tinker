@@ -1,0 +1,4 @@
+interface:
+  display_name: "飞书项目推进"
+  short_description: "依据项目群任务和成员分工推进工作，检查成果后报告并保留进度"
+  default_prompt: "使用 $feishu-project-runner 读取已配置的飞书项目群，持续推进本人已授权范围内的可执行工作，检查后按最新渠道要求报告实质成果；必要确认集中提出，等待期间继续独立工作，不逐项等待“继续”。"

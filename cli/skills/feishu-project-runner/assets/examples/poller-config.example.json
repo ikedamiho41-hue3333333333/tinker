@@ -1,0 +1,10 @@
+{
+  "owner_open_id": "YOUR_VERIFIED_OPEN_ID",
+  "chat_id": "YOUR_VERIFIED_CHAT_ID",
+  "workspace": "/ABSOLUTE/PATH/TO/SERVICE",
+  "schedule": {
+    "enabled": false,
+    "window_mode": "all_day",
+    "interval_minutes": 10
+  }
+}

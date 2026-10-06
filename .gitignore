@@ -34,3 +34,7 @@ Thumbs.db
 # logs
 *.log
 npm-debug.log*
+
+# Python poller test caches
+__pycache__/
+*.pyc
