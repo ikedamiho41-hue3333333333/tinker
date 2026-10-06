@@ -5,6 +5,7 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[2] / 'skills' / 'feishu-project-runner'
 
@@ -131,6 +132,40 @@ else:
         self.assertEqual(result['outcome'], 'waiting_for_lock')
         self.assertNotIn('needs_input', result)
         self.assertEqual(result['installation_status'], 'verified_live_trigger')
+
+    def test_unreadable_owner_metadata_waits_without_dispatch_or_alert(self):
+        lock = self.hold_worker_lock()
+        original = pathlib.Path.read_text
+        def denied(path, *args, **kwargs):
+            if path == lock / 'owner.json':
+                raise PermissionError(1, 'Operation not permitted', str(path))
+            return original(path, *args, **kwargs)
+        with patch.object(pathlib.Path, 'read_text', denied):
+            for _ in range(2):
+                result = self.poller.tick(self.settings, 'test')
+                self.assertEqual(result['outcome'], 'waiting_for_lock')
+                self.assertEqual(result['waiting_for_lock']['owner_read_status'], 'unavailable')
+                self.assertEqual(result['waiting_for_lock']['owner'], {})
+                self.assertIn('delivery', result['unhandled_changes'])
+        self.assertEqual(self.queue_count(), 0)
+        self.assertTrue(lock.exists())
+        (lock / 'owner.json').unlink()
+        lock.rmdir()
+        self.assertEqual(self.poller.tick(self.settings, 'test')['outcome'], 'queued')
+
+    def test_unverifiable_lock_existence_never_dispatches(self):
+        lock = self.base / '.feishu-project-runner' / 'run.lock'
+        original = pathlib.Path.exists
+        def denied(path):
+            if path == lock:
+                raise PermissionError(1, 'Operation not permitted', str(path))
+            return original(path)
+        with patch.object(pathlib.Path, 'exists', denied):
+            result = self.poller.tick(self.settings, 'test')
+        self.assertEqual(result['outcome'], 'error')
+        calls = [json.loads(x) for x in (self.base / 'queue-calls.jsonl').read_text().splitlines()]
+        self.assertFalse(any('[自动检查轮次' in c[-1] for c in calls))
+        self.assertIn('delivery', result['unhandled_changes'])
 
     def test_one_delivery_one_queue_then_idle(self):
         first = self.poller.tick(self.settings, 'test')

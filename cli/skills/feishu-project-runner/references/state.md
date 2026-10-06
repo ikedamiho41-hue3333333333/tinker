@@ -39,3 +39,5 @@ worker摘要增加以下字段（marker取自动提示中的完整标识）：
 `processed`表示本轮已完整读群并处理全部可执行部分或准确记录具体阻塞，不表示所有任务已完成，也不表示允许发报告。无法取锁填`waiting_for_lock`且`read_complete=false`；读取、身份或检查未完成填`incomplete`，不能冒称processed。保持真实tasks，不用空数组清除旧任务。仅自动轮次使用marker，手动轮次不伪造自动处理结果。
 
 调度器只有观察到对应会话轮次结束且收到匹配marker的processed/read_complete=true，才消耗该轮输入修订。锁等待保留待办；没有匹配结果时保留pending和待办，记录awaiting_round_result并向原执行窗口去重提示核对。旧版本仅有task_complete时不能推断工作完成。用户暂停或中断后仍暂停，锁释放不能覆盖暂停。
+
+后台确认run.lock存在但owner.json无法读取时，只记录owner_read_status=unavailable及具体错误，保留waiting_for_lock和待办，不将附加元数据失败当作任务失败、不猜测持有者或删锁。若连锁是否存在都无法可靠核验，仍停止派发并去重告警；不要把权限错误当作锁不存在。

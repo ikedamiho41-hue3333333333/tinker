@@ -33,6 +33,18 @@ def save(path, value):
     os.replace(temporary, path)
 
 
+def lock_owner_metadata(worker_lock):
+    """Owner metadata is diagnostic; an existing lock always blocks dispatch."""
+    try:
+        owner = read_json(worker_lock / 'owner.json', None)
+        if not isinstance(owner, dict):
+            return {'owner': {}, 'owner_read_status': 'unavailable',
+                    'owner_read_error': 'owner metadata missing or not an object'}
+        return {'owner': owner, 'owner_read_status': 'readable'}
+    except (OSError, ValueError) as error:
+        return {'owner': {}, 'owner_read_status': 'unavailable', 'owner_read_error': str(error)}
+
+
 def revisions(messages):
     fields = ('content', 'mentions', 'deleted', 'sender', 'msg_type', 'update_time')
     return {m['message_id']: hashlib.sha256(json.dumps(
@@ -245,7 +257,7 @@ def tick(settings, origin):
             status['installation_status'] = 'verified_live_trigger' if origin == 'launchd' else status.get('installation_status')
             if lock_present:
                 status.update(outcome='waiting_for_lock', waiting_for_lock={
-                    'path': str(worker_lock), 'owner': read_json(worker_lock / 'owner.json', {}),
+                    'path': str(worker_lock), **lock_owner_metadata(worker_lock),
                     'observed_at': now(), 'next_action': 'recheck at next tick; never remove another owner lock'})
                 save(status_path, status)
                 return status
