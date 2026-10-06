@@ -210,17 +210,43 @@ def tick(settings, origin):
                 notify_error(status, settings, config, status_path, incident, status['needs_input']['question'])
                 save(status_path, status)
                 return status
-            if terminal == 'complete':
-                for key, value in pending.get('input_changes', {}).items():
-                    if dirty.get(key) == value:
-                        dirty.pop(key, None)
-                status['last_completed_dispatch'] = dict(pending, observed_complete_at=now())
-                status['pending_dispatch'] = pending = None
-                if status.get('needs_input', {}).get('kind') == 'queue_delivery_unknown':
-                    status['last_resolved_incident'] = dict(status.pop('needs_input'), recovered_at=now())
             state = read_json(settings.get('worker_state', str(private / 'state.json')), {})
+            worker_lock = pathlib.Path(settings.get('project_workspace', config['workspace'])) / '.feishu-project-runner' / 'run.lock'
+            lock_present = worker_lock.exists()
+            result = state.get('round_result', {})
+            result_matches = bool(pending and result.get('marker') == pending['marker'])
+            waiting = result_matches and result.get('outcome') == 'waiting_for_lock'
+            processed = result_matches and result.get('outcome') == 'processed' and result.get('read_complete') is True
+            if terminal == 'complete':
+                if processed:
+                    for key, value in pending.get('input_changes', {}).items():
+                        if dirty.get(key) == value:
+                            dirty.pop(key, None)
+                    status['last_completed_dispatch'] = dict(pending, observed_complete_at=now(), round_result=result)
+                elif waiting:
+                    status['last_waiting_dispatch'] = dict(pending, observed_waiting_at=now())
+                else:
+                    # A finished conversation is not evidence that project inputs were processed.
+                    status.update(outcome='awaiting_round_result', needs_input={
+                        'kind': 'round_result_missing', 'marker': pending['marker'],
+                        'question': '自动轮次已结束但缺少匹配marker的处理结果；保留待办，需核对该轮是否实际完整读取和处理。'})
+                    incident = hashlib.sha256(('round-result:' + pending['marker']).encode()).hexdigest()
+                    status['needs_input']['incident_id'] = incident
+                    notify_error(status, settings, config, status_path, incident, status['needs_input']['question'])
+                    save(status_path, status)
+                    return status
+                status['pending_dispatch'] = pending = None
+                if status.get('needs_input', {}).get('kind') in ('queue_delivery_unknown', 'round_result_missing'):
+                    status['last_resolved_incident'] = dict(status.pop('needs_input'), recovered_at=now())
+            if lock_present:
+                status.update(outcome='waiting_for_lock', waiting_for_lock={
+                    'path': str(worker_lock), 'owner': read_json(worker_lock / 'owner.json', {}),
+                    'observed_at': now(), 'next_action': 'recheck at next tick; never remove another owner lock'})
+                save(status_path, status)
+                return status
+            status.pop('waiting_for_lock', None)
             busy = session_busy(settings['session_log'])
-            unfinished = not state or any(t.get('status') in ('queued', 'in_progress', 'blocked') for t in state.get('tasks', []))
+            unfinished = not state or any(t.get('status') in ('queued', 'in_progress', 'blocked', 'waiting_for_lock') for t in state.get('tasks', []))
             reason = dispatch_reason(bool(dirty), unfinished, busy, bool(pending))
             if reason:
                 marker = 'shenlai-auto-' + str(uuid.uuid4())
@@ -233,12 +259,15 @@ def tick(settings, origin):
                           '只有本人实质成果检查后按用户最新渠道要求报告；飞书使用配置的机器人，@配置的本人并按分工添加需行动成员。'
                           '不发配置/巡检消息，不冒领、不重复报告，不替代真人签收或双方归一，保留所有审批门禁。'
                           '本机 scheduler-status.json 是调度触发及读群证据；不要自行另建调度器或覆盖此文件。'
-                          '结束前更新任务、检查与读取台账，保存后释放自己的锁。')
+                          '锁已占用时记录waiting_for_lock，不要求本人重复批准继续；只释放自己的锁。结束前更新任务、检查与读取台账。')
                 prompt += ('项目工作目录为 ' + settings.get('project_workspace', config['workspace']) +
                            '；调度记录位于 ' + str(status_path) + '，不要覆盖此文件。'
                            '收尾后将任务状态摘要（task_id/status/next_action）写入 ' +
                            settings.get('worker_state', str(private / 'worker-state.json')) +
-                           ' 供轮询器判断未完成工作，保持原项目完整台账。')
+                           ' 供轮询器判断未完成工作，保持原项目完整台账。摘要必须包含round_result：marker为本轮完整标识，'
+                           'outcome仅在完整读群并处理可执行项/明确阻塞后填processed且read_complete=true；'
+                           '无法取锁填waiting_for_lock且read_complete=false，其他失败填incomplete。'
+                           '仅写worker摘要，不覆盖scheduler-status.json或他人完整台账。')
                 pending = {'marker': marker, 'queued_at': now(), 'reason': reason, 'status': 'sending', 'input_changes': dict(dirty)}
                 status['pending_dispatch'] = pending
                 save(status_path, status)  # Unknown delivery must not be blindly retried.

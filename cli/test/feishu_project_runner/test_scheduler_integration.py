@@ -48,11 +48,79 @@ else:
         p = self.base / 'queue-calls.jsonl'
         return len(p.read_text().splitlines()) if p.exists() else 0
 
-    def finish(self, pending):
+    def finish(self, pending, acknowledge=True):
+        if acknowledge:
+            state = json.loads((self.base / 'worker.json').read_text())
+            state['round_result'] = {'marker': pending['marker'], 'outcome': 'processed', 'read_complete': True}
+            self.write('worker.json', state)
         records = [{'timestamp': self.poller.now(), 'type': 'response_item', 'payload': {'type': 'message', 'role': 'user', 'content': [{'text': pending['marker']}]}},
                    {'timestamp': self.poller.now(), 'type': 'event_msg', 'payload': {'type': 'task_complete'}}]
         with (self.base / 'session.jsonl').open('a') as f:
             for r in records: f.write(json.dumps(r) + '\n')
+
+    def hold_worker_lock(self):
+        path = self.base / '.feishu-project-runner' / 'run.lock'
+        path.mkdir(parents=True)
+        (path / 'owner.json').write_text(json.dumps({'run_id': 'another-run', 'thread_id': 'another-thread'}))
+        return path
+
+    def test_worker_lock_preserves_delivery_then_resumes(self):
+        lock = self.hold_worker_lock()
+        for _ in range(3):
+            result = self.poller.tick(self.settings, 'test')
+            self.assertEqual(result['outcome'], 'waiting_for_lock')
+            self.assertIn('delivery', result['unhandled_changes'])
+        self.assertEqual(self.queue_count(), 0)
+        (lock / 'owner.json').unlink()
+        lock.rmdir()
+        self.assertEqual(self.poller.tick(self.settings, 'test')['outcome'], 'queued')
+        self.assertEqual(self.queue_count(), 1)
+
+    def test_completed_turn_without_result_does_not_consume_delivery(self):
+        first = self.poller.tick(self.settings, 'test')
+        self.finish(first['pending_dispatch'], acknowledge=False)
+        self.hold_worker_lock()
+        result = self.poller.tick(self.settings, 'test')
+        self.assertIn('delivery', result['unhandled_changes'])
+        self.assertEqual(result['outcome'], 'awaiting_round_result')
+
+    def test_lock_race_wait_ack_then_release_resumes(self):
+        first = self.poller.tick(self.settings, 'test')
+        lock = self.hold_worker_lock()
+        self.finish(first['pending_dispatch'])
+        self.write('worker.json', {'round_result': {'marker': first['pending_dispatch']['marker'], 'outcome': 'waiting_for_lock'}, 'tasks': []})
+        result = self.poller.tick(self.settings, 'test')
+        self.assertEqual(result['outcome'], 'waiting_for_lock')
+        self.assertIn('delivery', result['unhandled_changes'])
+        (lock / 'owner.json').unlink()
+        lock.rmdir()
+        self.assertEqual(self.poller.tick(self.settings, 'test')['outcome'], 'queued')
+
+    def test_stale_acknowledgement_is_not_completion(self):
+        first = self.poller.tick(self.settings, 'test')
+        self.finish(first['pending_dispatch'], acknowledge=False)
+        self.write('worker.json', {'round_result': {'marker': 'older-round', 'outcome': 'processed', 'read_complete': True}, 'tasks': []})
+        result = self.poller.tick(self.settings, 'test')
+        self.assertEqual(result['outcome'], 'awaiting_round_result')
+        self.assertIn('delivery', result['unhandled_changes'])
+        before = self.queue_count()
+        self.poller.tick(self.settings, 'test')
+        self.assertEqual(self.queue_count(), before)
+
+    def test_lock_wait_keeps_latest_edit_and_respects_pause(self):
+        lock = self.hold_worker_lock()
+        self.poller.tick(self.settings, 'test')
+        self.write('history.json', {'ok': True, 'identity': 'user', 'data': {'has_more': False, 'messages': [{'message_id': 'delivery', 'content': 'withdraw v2'}]}})
+        result = self.poller.tick(self.settings, 'test')
+        expected = self.poller.revisions([{'message_id': 'delivery', 'content': 'withdraw v2'}])
+        self.assertEqual(result['unhandled_changes'], expected)
+        config = json.loads((self.base / 'config.json').read_text())
+        config['schedule']['enabled'] = False
+        self.write('config.json', config)
+        (lock / 'owner.json').unlink()
+        lock.rmdir()
+        self.assertEqual(self.poller.tick(self.settings, 'test')['outcome'], 'disabled')
+        self.assertEqual(self.queue_count(), 0)
 
     def test_one_delivery_one_queue_then_idle(self):
         first = self.poller.tick(self.settings, 'test')
@@ -121,7 +189,9 @@ else:
     def test_blocked_external_dependency_is_rechecked(self):
         first = self.poller.tick(self.settings, 'test')
         self.finish(first['pending_dispatch'])
-        self.write('worker.json', {'tasks': [{'task_id': 'task', 'status': 'blocked'}]})
+        state = json.loads((self.base / 'worker.json').read_text())
+        state['tasks'] = [{'task_id': 'task', 'status': 'blocked'}]
+        self.write('worker.json', state)
         self.assertEqual(self.poller.tick(self.settings, 'test')['outcome'], 'queued')
 
     def test_failed_queue_reports_unknown_delivery_and_no_blind_retry(self):
