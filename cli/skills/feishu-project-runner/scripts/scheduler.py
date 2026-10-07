@@ -188,6 +188,14 @@ def tick(settings, origin):
             return status
         save(status_path, status)
         try:
+            workspace = settings.get('project_workspace', config['workspace'])
+            expected_workspace = config.get('project_workspace')
+            if expected_workspace and os.path.abspath(workspace) != os.path.abspath(expected_workspace):
+                raise ValueError('project workspace binding mismatch')
+            if config.get('branch_id') and config['branch_id'] != settings.get('branch_id'):
+                raise ValueError('project branch binding mismatch')
+            status.update(target_project_workspace=workspace, target_branch_id=settings.get('branch_id'),
+                          target_worker_state=settings.get('worker_state', str(private / 'state.json')))
             auth = json.loads(command([settings['lark'], 'auth', 'status', '--json', '--verify'], config['workspace']))
             user = auth.get('identities', {}).get('user', {})
             if not user.get('verified') or user.get('openId') != config['owner_open_id']:
@@ -268,6 +276,8 @@ def tick(settings, origin):
                 marker = 'shenlai-auto-' + str(uuid.uuid4())
                 prompt = ('[自动检查轮次 ' + marker + '] 用户已授权全天24小时、每10分钟推进神来项目，其余授权与规则不变。'
                           '重新读取本机已安装的 $feishu-project-runner，使用本项目配置和台账。'
+                          '延续用户已明确授予的持续推进范围；“看看新消息/检查一下”不自动撤销既有执行授权，'
+                          '除非用户明确要求只读、暂停或本轮不得执行。读完交付后继续依赖核对、本人复查及已有授权内的修正。'
                           '先取得独占锁、核验本人并完整回读神来群和关键附件，判断项目相关性、本人分工及授权。'
                           '发现同事新交付满足依赖时恢复待办，持续完成可执行工作并实际检查，不等待逐项“继续”；'
                           '待确认项集中提出建议和影响，已问未变的不重复问，继续独立工作。'
@@ -277,13 +287,26 @@ def tick(settings, origin):
                           '本机 scheduler-status.json 是调度触发及读群证据；不要自行另建调度器或覆盖此文件。'
                           '锁已占用时记录waiting_for_lock，不要求本人重复批准继续；只释放自己的锁。结束前更新任务、检查与读取台账。')
                 prompt += ('项目工作目录为 ' + settings.get('project_workspace', config['workspace']) +
+                           '；先读取该目录下 .feishu-project-runner/config.json 与 state.json，核对workspace及分工，'
+                           '不得回退到父目录另一分支的台账或锁。配置绝对路径为 ' +
+                           str(pathlib.Path(workspace) / '.feishu-project-runner/config.json') +
                            '；调度记录位于 ' + str(status_path) + '，不要覆盖此文件。'
                            '收尾后将任务状态摘要（task_id/status/next_action）写入 ' +
                            settings.get('worker_state', str(private / 'worker-state.json')) +
                            ' 供轮询器判断未完成工作，保持原项目完整台账。摘要必须包含round_result：marker为本轮完整标识，'
                            'outcome仅在完整读群并处理可执行项/明确阻塞后填processed且read_complete=true；'
                            '无法取锁填waiting_for_lock且read_complete=false，其他失败填incomplete。'
-                           '仅写worker摘要，不覆盖scheduler-status.json或他人完整台账。')
+                           '仅写worker摘要，不覆盖scheduler-status.json或他人完整台账。'
+                           '收尾前逐项核对仍可执行的next_action；只要尚有已授权可执行项就在本轮继续。'
+                           '只有具体外部依赖、真人决定、权限/读取失败、暂停或运行限制才收尾，并记明恢复条件。')
+                if settings.get('branch_id'):
+                    preflight = ['python3', 'scripts/check_binding.py', '--workspace', workspace,
+                                 '--branch-id', settings['branch_id'], '--owner-open-id', config['owner_open_id'],
+                                 '--chat-id', config['chat_id'], '--automatic']
+                    prompt += ('执行项目动作前，在已安装skill目录运行只读校验，argv为 ' +
+                               json.dumps(preflight, ensure_ascii=False) +
+                               '；它必须读取实际分支配置并verified=true。后台只核对服务镜像绑定，不能代替此实际校验。'
+                               '失败时写round_result outcome=incomplete并说明具体阻塞，不能回退目录或擅自恢复暂停。')
                 pending = {'marker': marker, 'queued_at': now(), 'reason': reason, 'status': 'sending', 'input_changes': dict(dirty)}
                 status['pending_dispatch'] = pending
                 save(status_path, status)  # Unknown delivery must not be blindly retried.

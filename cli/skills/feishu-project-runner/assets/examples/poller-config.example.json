@@ -6,5 +6,7 @@
     "enabled": false,
     "window_mode": "all_day",
     "interval_minutes": 10
-  }
+  },
+  "project_workspace": "/ABSOLUTE/PATH/TO/YOUR/PROJECT",
+  "branch_id": "YOUR_PROJECT_BRANCH_ID"
 }

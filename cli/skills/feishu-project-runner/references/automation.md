@@ -80,3 +80,5 @@ python3 -m unittest discover -s test/feishu_project_runner -v
 Node 测试验证真实 CLI 安装和完整资源可用；22项 Python 测试执行真实调度器、状态与文件锁，模拟外部飞书和 Codex CLI，不触达真实群或会话。测试通过不证明某位新成员的真实任务、发送或人工验收完成。
 
 锁占用时scheduler-status.json显示waiting_for_lock，消息修订仍保留，释放后下一次真实触发接续。worker摘要的round_result协议见[state.md](state.md)；task_complete不再单独证明项目输入已处理。升级后既有窗口应重新读取skill；旧轮次缺处理结果时需基于真实记录补结果，不能直接清空pending。
+
+项目目录/分支变化后须重新核对实际调度绑定，并按[分支调度与连续执行](continuation.md)验证完整链路；不要保留manual_branch_only却宣称自动运行。

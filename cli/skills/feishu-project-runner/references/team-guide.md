@@ -180,3 +180,5 @@ node cli/bin/tinker.js skills install --agent codex --only feishu-project-runner
 **飞书工具或权限缺失？** 让 Codex 按官方 [lark-cli 说明](https://github.com/larksuite/cli) 检查安装和应用配置。用户授权与机器人权限分开处理，只补实际缺项；机器人权限问题不能靠给用户反复登录解决。
 
 更详细的配置字段见 [首次接入](onboarding.md)，项目阶段与报告对象见 [神来分工参考](shenlai.md)；这些参考都要与最新群确认核对。
+
+项目目录/分支变化后须重新核对实际调度绑定，并按[分支调度与连续执行](continuation.md)验证完整链路；不要保留manual_branch_only却宣称自动运行。

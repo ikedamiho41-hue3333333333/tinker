@@ -167,6 +167,33 @@ else:
         self.assertFalse(any('[自动检查轮次' in c[-1] for c in calls))
         self.assertIn('delivery', result['unhandled_changes'])
 
+    def test_team_branch_ignores_independent_project_lock(self):
+        self.hold_worker_lock()
+        team = self.base / 'team'
+        team.mkdir()
+        self.settings.update(project_workspace=str(team), branch_id='team')
+        config = json.loads((self.base / 'config.json').read_text())
+        config.update(project_workspace=str(team), branch_id='team')
+        self.write('config.json', config)
+        result = self.poller.tick(self.settings, 'test')
+        self.assertEqual(result['outcome'], 'queued')
+        self.assertEqual(result.get('target_project_workspace'), str(team))
+        self.assertEqual(result['target_branch_id'], 'team')
+        prompt = json.loads((self.base / 'queue-calls.jsonl').read_text().splitlines()[0])[-1]
+        self.assertIn(str(team / '.feishu-project-runner/config.json'), prompt)
+        self.assertTrue((self.base / '.feishu-project-runner/run.lock').exists())
+
+    def test_branch_binding_mismatch_blocks_business_dispatch(self):
+        self.settings.update(project_workspace=str(self.base / 'team'), branch_id='team')
+        config = json.loads((self.base / 'config.json').read_text())
+        config.update(project_workspace=str(self.base), branch_id='independent')
+        self.write('config.json', config)
+        result = self.poller.tick(self.settings, 'test')
+        self.assertEqual(result['outcome'], 'error')
+        self.assertIn('binding', result['last_error'])
+        calls = [json.loads(x) for x in (self.base / 'queue-calls.jsonl').read_text().splitlines()]
+        self.assertFalse(any('[自动检查轮次' in c[-1] for c in calls))
+
     def test_one_delivery_one_queue_then_idle(self):
         first = self.poller.tick(self.settings, 'test')
         self.assertEqual(first['outcome'], 'queued')

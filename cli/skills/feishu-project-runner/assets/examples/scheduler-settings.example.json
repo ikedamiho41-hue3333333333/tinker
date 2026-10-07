@@ -5,5 +5,6 @@
   "lark": "/ABSOLUTE/PATH/TO/lark-cli",
   "codex": "/ABSOLUTE/PATH/TO/codex",
   "project_workspace": "/ABSOLUTE/PATH/TO/YOUR/PROJECT",
-  "worker_state": "/ABSOLUTE/PATH/TO/SERVICE/worker-state.json"
+  "worker_state": "/ABSOLUTE/PATH/TO/SERVICE/worker-state.json",
+  "branch_id": "YOUR_PROJECT_BRANCH_ID"
 }
