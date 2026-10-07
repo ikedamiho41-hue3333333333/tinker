@@ -24,5 +24,6 @@
     "status_path": "/ABSOLUTE/PATH/TO/SERVICE/scheduler-status.json",
     "worker_state_path": "/ABSOLUTE/PATH/TO/SERVICE/worker-state.json",
     "control_path": "/ABSOLUTE/PATH/TO/SERVICE/poller-config.json"
-  }
+  },
+  "branch_id": "YOUR_PROJECT_BRANCH_ID"
 }
